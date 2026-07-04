@@ -1,0 +1,2949 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI-powered Purchase Intelligence System API",
+    "description": "Backend service for ingestion, OCR, LLM extraction, and validation of paper bills.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "tags": [
+          "User Authentication"
+        ],
+        "summary": "Signup",
+        "description": "Registers a new user, hashes their password, seeds initial default categories,\nand returns a JWT access token.",
+        "operationId": "signup_auth_signup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignupSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "User Authentication"
+        ],
+        "summary": "Login Form",
+        "description": "Standard OAuth2 Form-based login endpoint. Used by Swagger UI authorize lock.",
+        "operationId": "login_form_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_form_auth_login_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login/json": {
+      "post": {
+        "tags": [
+          "User Authentication"
+        ],
+        "summary": "Login Json",
+        "description": "JSON-based login endpoint. Ideal for REST clients and frontend integrations.",
+        "operationId": "login_json_auth_login_json_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLoginSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "User Authentication"
+        ],
+        "summary": "Forgot Password",
+        "description": "Generates a password reset token and simulates sending a reset link to the terminal.",
+        "operationId": "forgot_password_auth_forgot_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "tags": [
+          "User Authentication"
+        ],
+        "summary": "Reset Password",
+        "description": "Verifies a reset token and updates the user's password.",
+        "operationId": "reset_password_auth_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization": {
+      "get": {
+        "tags": [
+          "Configuration & Settings"
+        ],
+        "summary": "Get Organization Settings",
+        "description": "Returns the organization settings for the current logged-in user.\nReturns default values if no custom settings exist yet in the database.",
+        "operationId": "get_organization_settings_settings_organization_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettingsSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Configuration & Settings"
+        ],
+        "summary": "Update Organization Settings",
+        "description": "Upserts (saves or updates) organization settings for the current user.",
+        "operationId": "update_organization_settings_settings_organization_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationSettingsSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettingsSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/settings/profile": {
+      "get": {
+        "tags": [
+          "Configuration & Settings"
+        ],
+        "summary": "Get Profile Settings",
+        "description": "Returns the user profile display preferences.\nReturns default values if no custom settings exist yet in the database.",
+        "operationId": "get_profile_settings_settings_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileSettingsSchema"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Configuration & Settings"
+        ],
+        "summary": "Update Profile Settings",
+        "description": "Upserts (saves or updates) user profile display preferences for the current user.",
+        "operationId": "update_profile_settings_settings_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileSettingsSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileSettingsSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/upload": {
+      "post": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Upload Bill",
+        "description": "Ingests a paper bill image or PDF, runs the preprocessing & OCR pipeline,\nextracts structured data using the LLM Vision model, and validates it.\nUses temporary files which are deleted immediately after processing.",
+        "operationId": "upload_bill_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_bill_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/upload/batch": {
+      "post": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Upload Bills Batch",
+        "description": "Concurrently processes a list of uploaded bill images/PDFs using asyncio.gather.\nReturns a list of processing results.",
+        "operationId": "upload_bills_batch_upload_batch_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_bills_batch_upload_batch_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/save": {
+      "post": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Save Bill",
+        "description": "Saves validated JSON input into MongoDB under the current user's account.\nPerforms upserts on user-specific products and dealers, writes the processing log, and stores the bill.",
+        "operationId": "save_bill_save_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BillDataSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/bills": {
+      "get": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Get All Bills",
+        "description": "Returns all bills stored in the system under the current user's account.",
+        "operationId": "get_all_bills_bills_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillDocument"
+                  },
+                  "type": "array",
+                  "title": "Response Get All Bills Bills Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/bill/{id}": {
+      "get": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Get Bill By Id",
+        "description": "Returns a single bill by its unique ID, restricted to the owner.",
+        "operationId": "get_bill_by_id_bill__id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillDocument"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Update Bill Fields",
+        "description": "Updates specific fields of an existing bill document owned by the current user.",
+        "operationId": "update_bill_fields_bill__id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "title": "Updated Fields"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Get All Categories",
+        "description": "Returns all categories stored in the system under the user's account.",
+        "operationId": "get_all_categories_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryResponseSchema"
+                  },
+                  "type": "array",
+                  "title": "Response Get All Categories Categories Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Create Category",
+        "description": "Creates a new category in the database for the authenticated user.",
+        "operationId": "create_category_categories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/categories/{id}": {
+      "put": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Update Category",
+        "description": "Updates a category's name and cascades changes to associated products and bills for the current user.",
+        "operationId": "update_category_categories__id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreateSchema"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Bill Ingestion"
+        ],
+        "summary": "Delete Category",
+        "description": "Deletes a category and resets references in products and bills to empty string (limited to user).",
+        "operationId": "delete_category_categories__id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/dashboard": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Dashboard",
+        "description": "Returns overall dashboard metrics and chronological purchase summaries.",
+        "operationId": "get_dashboard_analytics_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/dealers": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get All Dealers Profiles",
+        "description": "Returns analytics profiles for all active dealers.",
+        "operationId": "get_all_dealers_profiles_analytics_dealers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DealerProfileResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get All Dealers Profiles Analytics Dealers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/dealers/compare": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Compare Dealers",
+        "description": "Compares side-by-side transaction metrics and calculates savings opportunities between two dealers.",
+        "operationId": "compare_dealers_analytics_dealers_compare_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dealer_a",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "First dealer name to compare",
+              "title": "Dealer A"
+            },
+            "description": "First dealer name to compare"
+          },
+          {
+            "name": "dealer_b",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Second dealer name to compare",
+              "title": "Dealer B"
+            },
+            "description": "Second dealer name to compare"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealerComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/dealers/{dealer_name}": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Dealer Profile",
+        "description": "Returns detailed analytics profile for a specific dealer.",
+        "operationId": "get_dealer_profile_analytics_dealers__dealer_name__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dealer_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dealer Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealerProfileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/products": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Product Rankings",
+        "description": "Returns lists of top most purchased, highest spending, and least purchased products.",
+        "operationId": "get_product_rankings_analytics_products_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductAnalyticsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/products/compare": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Compare Product Dealers",
+        "description": "Analyzes prices for the same product across all supplying dealers to find the cheapest option.",
+        "operationId": "compare_product_dealers_analytics_products_compare_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Name of the product to compare across suppliers",
+              "title": "Product Name"
+            },
+            "description": "Name of the product to compare across suppliers"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SameProductComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/products/categories": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Category Analytics",
+        "description": "Returns spending, quantities, and MoM growth metrics grouped by product category.",
+        "operationId": "get_category_analytics_analytics_products_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryAnalyticsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/products/{product_name}": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Product Profile",
+        "description": "Returns individual purchase stats, min/max price, last purchase, and frequency for a product.",
+        "operationId": "get_product_profile_analytics_products__product_name__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Product Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductStatsItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/price-trends": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Price Trends",
+        "description": "Generates monthly average price trends and moving averages for a product.",
+        "operationId": "get_price_trends_analytics_price_trends_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Product name to check price history",
+              "title": "Product Name"
+            },
+            "description": "Product name to check price history"
+          },
+          {
+            "name": "dealer_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional dealer name to filter trend history",
+              "title": "Dealer Name"
+            },
+            "description": "Optional dealer name to filter trend history"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPriceTrendResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/price-trends/dealers": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Dealer Price History Trends",
+        "description": "Generates price history trends of a product mapped per individual dealer.",
+        "operationId": "get_dealer_price_history_trends_analytics_price_trends_dealers_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Product name to check price history per dealer",
+              "title": "Product Name"
+            },
+            "description": "Product name to check price history per dealer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DealerPriceHistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analytics/purchase-trends": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Purchase Trends",
+        "description": "Generates chronological transaction trends grouped daily, weekly, monthly, quarterly, and yearly.",
+        "operationId": "get_purchase_trends_analytics_purchase_trends_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseTrendResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/savings": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Savings Opportunities",
+        "description": "Identifies overpayment margins and total potential savings if shifting to the cheapest supplier.",
+        "operationId": "get_savings_opportunities_analytics_savings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavingsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/insights": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Product Insights",
+        "description": "Extracts business insights such as frequently purchased together items, fast growing items, and price alerts.",
+        "operationId": "get_product_insights_analytics_insights_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductInsightsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/forecast": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Forecast",
+        "description": "Generates future spend, quantity, and price trend estimates for next month using the active forecaster.",
+        "operationId": "get_forecast_analytics_forecast_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/analytics/ai-context": {
+      "get": {
+        "tags": [
+          "Analytics Engine"
+        ],
+        "summary": "Get Ai Context",
+        "description": "Exposes structured raw JSON context payloads for a downstream AI chat assistant to consume.",
+        "operationId": "get_ai_context_analytics_ai_context_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Type of query context to build (e.g. cheapest_dealer, monthly_spend, dealer_comparison, price_increase, negotiation_targets)",
+              "title": "Query Type"
+            },
+            "description": "Type of query context to build (e.g. cheapest_dealer, monthly_spend, dealer_comparison, price_increase, negotiation_targets)"
+          },
+          {
+            "name": "product_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Product name (required for cheapest_dealer context)",
+              "title": "Product Name"
+            },
+            "description": "Product name (required for cheapest_dealer context)"
+          },
+          {
+            "name": "dealer_a",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First dealer name (required for dealer_comparison context)",
+              "title": "Dealer A"
+            },
+            "description": "First dealer name (required for dealer_comparison context)"
+          },
+          {
+            "name": "dealer_b",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Second dealer name (required for dealer_comparison context)",
+              "title": "Dealer B"
+            },
+            "description": "Second dealer name (required for dealer_comparison context)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIContextResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Simple API health check endpoint.",
+        "operationId": "health_check__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AIContextResponse": {
+        "properties": {
+          "context_type": {
+            "type": "string",
+            "title": "Context Type",
+            "description": "Type of query context generated"
+          },
+          "context_data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Context Data",
+            "description": "Structured JSON payload prepared for AI agent ingestion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "context_type",
+          "context_data"
+        ],
+        "title": "AIContextResponse"
+      },
+      "BillDataSchema": {
+        "properties": {
+          "dealer_name": {
+            "type": "string",
+            "title": "Dealer Name",
+            "description": "Name of the dealer/merchant"
+          },
+          "invoice_no": {
+            "type": "string",
+            "title": "Invoice No",
+            "description": "Invoice or bill number"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date",
+            "description": "Invoice date (format: YYYY-MM-DD or raw extracted date)"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BillItemSchema"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of items in the bill"
+          },
+          "subtotal": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Subtotal",
+            "description": "Subtotal before taxes"
+          },
+          "gst": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Gst",
+            "description": "GST / Tax amount"
+          },
+          "total": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Total",
+            "description": "Grand total of the bill"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Category for the entire bill and all its products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dealer_name",
+          "invoice_no",
+          "date",
+          "items",
+          "subtotal",
+          "gst",
+          "total",
+          "category"
+        ],
+        "title": "BillDataSchema"
+      },
+      "BillDocument": {
+        "properties": {
+          "_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "dealer_name": {
+            "type": "string",
+            "title": "Dealer Name"
+          },
+          "invoice_no": {
+            "type": "string",
+            "title": "Invoice No"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "bill_image": {
+            "type": "string",
+            "title": "Bill Image"
+          },
+          "subtotal": {
+            "type": "number",
+            "title": "Subtotal"
+          },
+          "gst": {
+            "type": "number",
+            "title": "Gst"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "pending"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BillItemDB"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "dealer_name",
+          "invoice_no",
+          "date",
+          "bill_image",
+          "subtotal",
+          "gst",
+          "total",
+          "items",
+          "category"
+        ],
+        "title": "BillDocument"
+      },
+      "BillItemDB": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "title": "Product"
+          },
+          "quantity": {
+            "type": "number",
+            "title": "Quantity"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product",
+          "quantity",
+          "unit",
+          "price",
+          "amount"
+        ],
+        "title": "BillItemDB"
+      },
+      "BillItemSchema": {
+        "properties": {
+          "product": {
+            "type": "string",
+            "title": "Product",
+            "description": "Name of the product"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Quantity",
+            "description": "Quantity purchased"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "description": "Unit of measurement (e.g., kg, pcs, box)"
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Price",
+            "description": "Unit price"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Amount",
+            "description": "Total amount for this item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product",
+          "quantity",
+          "unit",
+          "price",
+          "amount"
+        ],
+        "title": "BillItemSchema"
+      },
+      "Body_login_form_auth_login_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_form_auth_login_post"
+      },
+      "Body_upload_bill_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_bill_upload_post"
+      },
+      "Body_upload_bills_batch_upload_batch_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "Body_upload_bills_batch_upload_batch_post"
+      },
+      "CategoryAnalyticsResponse": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryStatsItem"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "top_category_by_spending": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Category By Spending"
+          },
+          "top_category_by_quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Category By Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categories"
+        ],
+        "title": "CategoryAnalyticsResponse"
+      },
+      "CategoryCreateSchema": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Name of the category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CategoryCreateSchema"
+      },
+      "CategoryResponseSchema": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "MongoDB ObjectId of the category"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Name of the category"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CategoryResponseSchema"
+      },
+      "CategoryStatsItem": {
+        "properties": {
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "total_spending": {
+            "type": "number",
+            "title": "Total Spending"
+          },
+          "total_quantity": {
+            "type": "number",
+            "title": "Total Quantity"
+          },
+          "growth_percentage": {
+            "type": "number",
+            "title": "Growth Percentage",
+            "description": "Month-over-month spending growth"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category_name",
+          "total_spending",
+          "total_quantity",
+          "growth_percentage"
+        ],
+        "title": "CategoryStatsItem"
+      },
+      "DashboardResponse": {
+        "properties": {
+          "total_purchase_amount": {
+            "type": "number",
+            "title": "Total Purchase Amount"
+          },
+          "total_bills": {
+            "type": "integer",
+            "title": "Total Bills"
+          },
+          "total_products": {
+            "type": "integer",
+            "title": "Total Products"
+          },
+          "total_dealers": {
+            "type": "integer",
+            "title": "Total Dealers"
+          },
+          "average_bill_amount": {
+            "type": "number",
+            "title": "Average Bill Amount"
+          },
+          "highest_bill_amount": {
+            "type": "number",
+            "title": "Highest Bill Amount"
+          },
+          "lowest_bill_amount": {
+            "type": "number",
+            "title": "Lowest Bill Amount"
+          },
+          "monthly_purchase_summary": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Monthly Purchase Summary"
+          },
+          "yearly_purchase_summary": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Yearly Purchase Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_purchase_amount",
+          "total_bills",
+          "total_products",
+          "total_dealers",
+          "average_bill_amount",
+          "highest_bill_amount",
+          "lowest_bill_amount",
+          "monthly_purchase_summary",
+          "yearly_purchase_summary"
+        ],
+        "title": "DashboardResponse"
+      },
+      "DealerComparisonMetric": {
+        "properties": {
+          "total_purchase": {
+            "type": "number",
+            "title": "Total Purchase"
+          },
+          "average_price": {
+            "type": "number",
+            "title": "Average Price"
+          },
+          "total_quantity": {
+            "type": "number",
+            "title": "Total Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_purchase",
+          "average_price",
+          "total_quantity"
+        ],
+        "title": "DealerComparisonMetric"
+      },
+      "DealerComparisonResponse": {
+        "properties": {
+          "dealer_a": {
+            "type": "string",
+            "title": "Dealer A"
+          },
+          "dealer_b": {
+            "type": "string",
+            "title": "Dealer B"
+          },
+          "metrics_a": {
+            "$ref": "#/components/schemas/DealerComparisonMetric"
+          },
+          "metrics_b": {
+            "$ref": "#/components/schemas/DealerComparisonMetric"
+          },
+          "price_difference": {
+            "type": "number",
+            "title": "Price Difference",
+            "description": "Average unit price difference for commonly purchased products"
+          },
+          "savings_opportunity": {
+            "type": "number",
+            "title": "Savings Opportunity",
+            "description": "Potential savings if buying from the cheaper dealer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dealer_a",
+          "dealer_b",
+          "metrics_a",
+          "metrics_b",
+          "price_difference",
+          "savings_opportunity"
+        ],
+        "title": "DealerComparisonResponse"
+      },
+      "DealerPriceHistoryResponse": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "dealers_trends": {
+            "items": {
+              "$ref": "#/components/schemas/DealerPriceTrendPoint"
+            },
+            "type": "array",
+            "title": "Dealers Trends"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "dealers_trends"
+        ],
+        "title": "DealerPriceHistoryResponse"
+      },
+      "DealerPriceTrendPoint": {
+        "properties": {
+          "dealer_name": {
+            "type": "string",
+            "title": "Dealer Name"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/PriceTrendPoint"
+            },
+            "type": "array",
+            "title": "Trend"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dealer_name",
+          "trend"
+        ],
+        "title": "DealerPriceTrendPoint"
+      },
+      "DealerProfileResponse": {
+        "properties": {
+          "dealer_name": {
+            "type": "string",
+            "title": "Dealer Name"
+          },
+          "total_purchase_amount": {
+            "type": "number",
+            "title": "Total Purchase Amount"
+          },
+          "number_of_bills": {
+            "type": "integer",
+            "title": "Number Of Bills"
+          },
+          "number_of_products_purchased": {
+            "type": "integer",
+            "title": "Number Of Products Purchased"
+          },
+          "monthly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Monthly Purchase"
+          },
+          "yearly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Yearly Purchase"
+          },
+          "average_bill_value": {
+            "type": "number",
+            "title": "Average Bill Value"
+          },
+          "most_purchased_product": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Purchased Product"
+          },
+          "last_purchase_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Purchase Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dealer_name",
+          "total_purchase_amount",
+          "number_of_bills",
+          "number_of_products_purchased",
+          "monthly_purchase",
+          "yearly_purchase",
+          "average_bill_value"
+        ],
+        "title": "DealerProfileResponse"
+      },
+      "ForecastPoint": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Future month/period label, e.g. '2026-07'"
+          },
+          "forecast_value": {
+            "type": "number",
+            "title": "Forecast Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "forecast_value"
+        ],
+        "title": "ForecastPoint"
+      },
+      "ForecastResponse": {
+        "properties": {
+          "next_month_purchase_amount": {
+            "type": "number",
+            "title": "Next Month Purchase Amount"
+          },
+          "next_month_product_quantity": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastPoint"
+            },
+            "type": "array",
+            "title": "Next Month Product Quantity"
+          },
+          "future_price_trend": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ForecastPoint"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Future Price Trend",
+            "description": "Future price projections key-indexed by product name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "next_month_purchase_amount",
+          "next_month_product_quantity",
+          "future_price_trend"
+        ],
+        "title": "ForecastResponse"
+      },
+      "ForgotPasswordSchema": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's registered email address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ForgotPasswordSchema"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InsightItem": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "value": {
+            "title": "Value"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "value",
+          "description"
+        ],
+        "title": "InsightItem"
+      },
+      "OrganizationSettingsSchema": {
+        "properties": {
+          "org_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Org Name",
+            "description": "Organization name (min 2 characters)"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Default currency (e.g. Indian Rupee (\u20b9))"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "description": "Timezone (e.g. Asia/Kolkata)"
+          },
+          "date_format": {
+            "type": "string",
+            "title": "Date Format",
+            "description": "Display date format (e.g. 10 Apr 2026)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "org_name",
+          "currency",
+          "timezone",
+          "date_format"
+        ],
+        "title": "OrganizationSettingsSchema"
+      },
+      "PriceTrendPoint": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "E.g. 'Jan', 'Feb', '2026-06'"
+          },
+          "average_price": {
+            "type": "number",
+            "title": "Average Price"
+          },
+          "min_price": {
+            "type": "number",
+            "title": "Min Price"
+          },
+          "max_price": {
+            "type": "number",
+            "title": "Max Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "average_price",
+          "min_price",
+          "max_price"
+        ],
+        "title": "PriceTrendPoint"
+      },
+      "ProductAnalyticsResponse": {
+        "properties": {
+          "top_most_purchased": {
+            "items": {
+              "$ref": "#/components/schemas/ProductStatsItem"
+            },
+            "type": "array",
+            "title": "Top Most Purchased",
+            "description": "Top 10 products by quantity"
+          },
+          "top_highest_spending": {
+            "items": {
+              "$ref": "#/components/schemas/ProductStatsItem"
+            },
+            "type": "array",
+            "title": "Top Highest Spending",
+            "description": "Top 10 products by amount spent"
+          },
+          "least_purchased": {
+            "items": {
+              "$ref": "#/components/schemas/ProductStatsItem"
+            },
+            "type": "array",
+            "title": "Least Purchased",
+            "description": "Least purchased products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "top_most_purchased",
+          "top_highest_spending",
+          "least_purchased"
+        ],
+        "title": "ProductAnalyticsResponse"
+      },
+      "ProductDealerPriceItem": {
+        "properties": {
+          "dealer_name": {
+            "type": "string",
+            "title": "Dealer Name"
+          },
+          "average_price": {
+            "type": "number",
+            "title": "Average Price"
+          },
+          "min_price": {
+            "type": "number",
+            "title": "Min Price"
+          },
+          "max_price": {
+            "type": "number",
+            "title": "Max Price"
+          },
+          "last_purchase_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Purchase Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dealer_name",
+          "average_price",
+          "min_price",
+          "max_price"
+        ],
+        "title": "ProductDealerPriceItem"
+      },
+      "ProductInsightsResponse": {
+        "properties": {
+          "frequently_purchased": {
+            "items": {
+              "$ref": "#/components/schemas/InsightItem"
+            },
+            "type": "array",
+            "title": "Frequently Purchased"
+          },
+          "frequently_purchased_together": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Frequently Purchased Together",
+            "description": "Association rules / items commonly bought on the same invoice"
+          },
+          "fast_growing": {
+            "items": {
+              "$ref": "#/components/schemas/InsightItem"
+            },
+            "type": "array",
+            "title": "Fast Growing"
+          },
+          "slow_moving": {
+            "items": {
+              "$ref": "#/components/schemas/InsightItem"
+            },
+            "type": "array",
+            "title": "Slow Moving"
+          },
+          "rising_prices": {
+            "items": {
+              "$ref": "#/components/schemas/InsightItem"
+            },
+            "type": "array",
+            "title": "Rising Prices"
+          },
+          "falling_prices": {
+            "items": {
+              "$ref": "#/components/schemas/InsightItem"
+            },
+            "type": "array",
+            "title": "Falling Prices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frequently_purchased",
+          "frequently_purchased_together",
+          "fast_growing",
+          "slow_moving",
+          "rising_prices",
+          "falling_prices"
+        ],
+        "title": "ProductInsightsResponse"
+      },
+      "ProductPriceTrendResponse": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "month_wise_trend": {
+            "items": {
+              "$ref": "#/components/schemas/PriceTrendPoint"
+            },
+            "type": "array",
+            "title": "Month Wise Trend"
+          },
+          "percentage_increase": {
+            "type": "number",
+            "title": "Percentage Increase",
+            "description": "Increase from start of period to end"
+          },
+          "percentage_decrease": {
+            "type": "number",
+            "title": "Percentage Decrease",
+            "description": "Decrease from start of period to end"
+          },
+          "moving_average": {
+            "type": "number",
+            "title": "Moving Average",
+            "description": "Overall average price across the trend period"
+          },
+          "overall_trend": {
+            "type": "string",
+            "title": "Overall Trend",
+            "description": "Description of the trend, e.g., 'RISING', 'STABLE', 'FALLING'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "month_wise_trend",
+          "percentage_increase",
+          "percentage_decrease",
+          "moving_average",
+          "overall_trend"
+        ],
+        "title": "ProductPriceTrendResponse"
+      },
+      "ProductStatsItem": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "total_quantity_purchased": {
+            "type": "number",
+            "title": "Total Quantity Purchased"
+          },
+          "total_amount_spent": {
+            "type": "number",
+            "title": "Total Amount Spent"
+          },
+          "average_price": {
+            "type": "number",
+            "title": "Average Price"
+          },
+          "min_price": {
+            "type": "number",
+            "title": "Min Price"
+          },
+          "max_price": {
+            "type": "number",
+            "title": "Max Price"
+          },
+          "number_of_dealers": {
+            "type": "integer",
+            "title": "Number Of Dealers"
+          },
+          "last_purchase_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Purchase Date"
+          },
+          "purchase_frequency": {
+            "type": "number",
+            "title": "Purchase Frequency",
+            "description": "Average days between purchases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "total_quantity_purchased",
+          "total_amount_spent",
+          "average_price",
+          "min_price",
+          "max_price",
+          "number_of_dealers",
+          "purchase_frequency"
+        ],
+        "title": "ProductStatsItem"
+      },
+      "ProfileSettingsSchema": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Display Name",
+            "description": "User's display name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's display email"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale",
+            "description": "Language/Locale (e.g. English (India))"
+          },
+          "time_format": {
+            "type": "string",
+            "title": "Time Format",
+            "description": "Time display format (12-hour or 24-hour)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "email",
+          "locale",
+          "time_format"
+        ],
+        "title": "ProfileSettingsSchema"
+      },
+      "PurchaseTrendResponse": {
+        "properties": {
+          "daily_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Daily Purchase"
+          },
+          "weekly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Weekly Purchase"
+          },
+          "monthly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Monthly Purchase"
+          },
+          "quarterly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Quarterly Purchase"
+          },
+          "yearly_purchase": {
+            "items": {
+              "$ref": "#/components/schemas/SpendTrendItem"
+            },
+            "type": "array",
+            "title": "Yearly Purchase"
+          }
+        },
+        "type": "object",
+        "required": [
+          "daily_purchase",
+          "weekly_purchase",
+          "monthly_purchase",
+          "quarterly_purchase",
+          "yearly_purchase"
+        ],
+        "title": "PurchaseTrendResponse"
+      },
+      "ResetPasswordSchema": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Password reset JWT token"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "New Password",
+            "description": "New password (min 6 characters)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "title": "ResetPasswordSchema"
+      },
+      "SameProductComparisonResponse": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "cheapest_dealer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cheapest Dealer"
+          },
+          "cheapest_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cheapest Price"
+          },
+          "costliest_dealer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costliest Dealer"
+          },
+          "costliest_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costliest Price"
+          },
+          "average_market_price": {
+            "type": "number",
+            "title": "Average Market Price"
+          },
+          "price_difference": {
+            "type": "number",
+            "title": "Price Difference",
+            "description": "Max price minus min price"
+          },
+          "potential_savings": {
+            "type": "number",
+            "title": "Potential Savings",
+            "description": "Potential savings calculated based on total quantity purchased"
+          },
+          "historical_prices": {
+            "items": {
+              "$ref": "#/components/schemas/ProductDealerPriceItem"
+            },
+            "type": "array",
+            "title": "Historical Prices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "average_market_price",
+          "price_difference",
+          "potential_savings",
+          "historical_prices"
+        ],
+        "title": "SameProductComparisonResponse"
+      },
+      "SavingsOpportunityItem": {
+        "properties": {
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "dealer_purchased": {
+            "type": "string",
+            "title": "Dealer Purchased"
+          },
+          "actual_price": {
+            "type": "number",
+            "title": "Actual Price"
+          },
+          "cheapest_dealer": {
+            "type": "string",
+            "title": "Cheapest Dealer"
+          },
+          "cheapest_price": {
+            "type": "number",
+            "title": "Cheapest Price"
+          },
+          "quantity_purchased": {
+            "type": "number",
+            "title": "Quantity Purchased"
+          },
+          "potential_savings": {
+            "type": "number",
+            "title": "Potential Savings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_name",
+          "dealer_purchased",
+          "actual_price",
+          "cheapest_dealer",
+          "cheapest_price",
+          "quantity_purchased",
+          "potential_savings"
+        ],
+        "title": "SavingsOpportunityItem"
+      },
+      "SavingsResponse": {
+        "properties": {
+          "total_potential_savings": {
+            "type": "number",
+            "title": "Total Potential Savings"
+          },
+          "opportunities": {
+            "items": {
+              "$ref": "#/components/schemas/SavingsOpportunityItem"
+            },
+            "type": "array",
+            "title": "Opportunities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_potential_savings",
+          "opportunities"
+        ],
+        "title": "SavingsResponse"
+      },
+      "SpendTrendItem": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "E.g. '2026-06', '2026', '2026-W24', '2026-06-13'"
+          },
+          "total_amount": {
+            "type": "number",
+            "title": "Total Amount"
+          },
+          "bill_count": {
+            "type": "integer",
+            "title": "Bill Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "total_amount",
+          "bill_count"
+        ],
+        "title": "SpendTrendItem"
+      },
+      "TokenResponseSchema": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "User",
+            "description": "Basic details of the logged in user"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "user"
+        ],
+        "title": "TokenResponseSchema"
+      },
+      "UserLoginSchema": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's email address"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "User's password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserLoginSchema"
+      },
+      "UserSignupSchema": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email",
+            "description": "User's email address"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6,
+            "title": "Password",
+            "description": "User's password (min 6 characters)"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 2,
+            "title": "Display Name",
+            "description": "User's name (min 2 characters)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "display_name"
+        ],
+        "title": "UserSignupSchema"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/auth/login"
+          }
+        }
+      }
+    }
+  }
+}
