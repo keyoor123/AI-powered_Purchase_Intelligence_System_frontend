@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { api, BillData, Category } from '../services/api.ts';
-import { X, Upload, File, Loader2, Check, AlertCircle, Edit } from 'lucide-react';
+import { X, Upload, File, Loader2, Check, AlertCircle, Edit, FileText } from 'lucide-react';
 import ExtractionReview from './ExtractionReview.tsx';
 
 type UploadStep = 'idle' | 'uploading' | 'review' | 'error' | 'batch_review' | 'batch_result';
@@ -192,6 +192,27 @@ const UploadModal: React.FC = () => {
     }
   };
 
+  const handleManualEntry = () => {
+    const defaultCategory = categories[0]?.name || 'Paint';
+    const defaultManualBill: BillData = {
+      dealer_name: '',
+      invoice_no: '',
+      date: new Date().toISOString().split('T')[0],
+      items: [
+        { product: '', quantity: 1, price: 0, amount: 0, unit: 'Nos' }
+      ],
+      subtotal: 0,
+      gst: 0,
+      total: 0,
+      category: defaultCategory,
+      source: 'Manual Entry',
+      status: 'verified'
+    };
+    setFile(null);
+    setExtractedData(defaultManualBill);
+    setStep('review');
+  };
+
   const handleBatchCategoryChange = (index: number, newCategory: string) => {
     setBatchBills(prev => {
       const copy = [...prev];
@@ -275,7 +296,7 @@ const UploadModal: React.FC = () => {
               <>
                 {step === 'idle' && 'Upload Invoice'}
                 {step === 'uploading' && (savingBatch ? 'Saving Invoices...' : 'Processing Invoices...')}
-                {step === 'review' && 'Extraction Review'}
+                {step === 'review' && (file ? 'Extraction Review' : 'Manual Invoice Entry')}
                 {step === 'batch_review' && 'Review Batch Uploads'}
                 {step === 'batch_result' && 'Batch Processing Results'}
                 {step === 'error' && 'Ingestion Error'}
@@ -359,6 +380,15 @@ const UploadModal: React.FC = () => {
                       onClick={() => folderInputRef.current?.click()}
                     >
                       Choose Folder
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary" 
+                      onClick={handleManualEntry}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <FileText size={16} />
+                      Add Invoice Manually
                     </button>
                   </div>
                 </div>
@@ -462,8 +492,9 @@ const UploadModal: React.FC = () => {
             {step === 'review' && extractedData && (
               <ExtractionReview 
                 initialData={extractedData} 
-                fileName={file?.name || 'invoice.pdf'}
-                onSave={handleReviewSave} 
+                fileName={file?.name || 'Manual Entry'}
+                onSave={handleReviewSave}
+                onCancel={() => setStep('idle')}
               />
             )}
 
