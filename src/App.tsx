@@ -14,6 +14,7 @@ import Savings from './pages/Savings.tsx';
 import AiAssistantPage from './pages/AiAssistantPage.tsx';
 import CategoriesPage from './pages/CategoriesPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
+import AiAgentsPage from './pages/AiAgentsPage.tsx';
 import UploadModal from './components/UploadModal.tsx';
 import { Sparkles } from 'lucide-react';
 
@@ -58,6 +59,8 @@ const MainLayout: React.FC = () => {
         return <CategoriesPage />;
       case 'Settings':
         return <SettingsPage />;
+      case 'AI Agents':
+        return <AiAgentsPage />;
       default:
         return <Dashboard />;
     }

@@ -1,6 +1,6 @@
 // src/services/api.ts
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function getToken(): string | null {
   return localStorage.getItem('pulse_jwt_token');
@@ -90,6 +90,33 @@ export interface BillData {
   source?: string;
   bill_image?: string;
   updated_at?: string;
+}
+
+export interface AgentRecipientEmail {
+  email: string;
+  is_enabled: boolean;
+}
+
+export interface AgentSettings {
+  agent_type: string;
+  is_enabled: boolean;
+  schedule_config: {
+    day_of_month: number;
+  };
+  delivery_emails: AgentRecipientEmail[];
+  last_run: string | null;
+  next_run: string | null;
+}
+
+export interface AgentExecutionLog {
+  _id: string;
+  user_id: string;
+  agent_type: string;
+  status: string;
+  run_at: string;
+  emails_sent_to: string[];
+  pdf_grid_file_id: string | null;
+  error_message: string | null;
 }
 
 export interface Category {
@@ -529,4 +556,67 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ message }),
     }),
+
+  // --- AI Agent Settings ---
+  getAgentSettings: () =>
+    request<AgentSettings>('/agents/monthly-report/settings', {
+      method: 'GET',
+    }),
+
+  updateAgentSettings: (payload: { is_enabled?: boolean; day_of_month?: number }) =>
+    request<AgentSettings>('/agents/monthly-report/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  addAgentRecipient: (email: string) =>
+    request<AgentSettings>('/agents/monthly-report/emails', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  toggleAgentRecipient: (email: string, is_enabled: boolean) =>
+    request<AgentSettings>('/agents/monthly-report/emails/toggle', {
+      method: 'PUT',
+      body: JSON.stringify({ email, is_enabled }),
+    }),
+
+  removeAgentRecipient: (email: string) =>
+    request<AgentSettings>(`/agents/monthly-report/emails/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+    }),
+
+  triggerAgent: () =>
+    request<{ status: 'success' | 'failed'; message: string }>('/agents/monthly-report/trigger', {
+      method: 'POST',
+    }),
+
+  getAgentLogs: () =>
+    request<AgentExecutionLog[]>('/agents/monthly-report/logs', {
+      method: 'GET',
+    }),
+
+  downloadAgentReport: async (fileId: string, filename = 'monthly_report.pdf') => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_BASE}/agents/monthly-report/reports/${fileId}`, {
+      method: 'GET',
+      headers,
+    });
+    if (!response.ok) {
+      throw new Error('Failed to download report PDF');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };

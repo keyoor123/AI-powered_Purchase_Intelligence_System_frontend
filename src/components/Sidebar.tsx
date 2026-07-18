@@ -9,6 +9,7 @@ import {
   Users, 
   TrendingUp, 
   Bot, 
+  Cpu,
   Tags, 
   Settings, 
   LogOut 
@@ -34,6 +35,7 @@ const Sidebar: React.FC = () => {
     { name: 'Suppliers', icon: Users },
     { name: 'Savings', icon: TrendingUp },
     { name: 'AI Assistant', icon: Bot },
+    { name: 'AI Agents', icon: Cpu },
   ];
 
   const manageNavItems = [
