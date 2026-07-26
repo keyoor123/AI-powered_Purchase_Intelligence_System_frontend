@@ -108,6 +108,18 @@ export interface AgentSettings {
   next_run: string | null;
 }
 
+export interface YearlyAgentSettings {
+  agent_type: string;
+  is_enabled: boolean;
+  schedule_config: {
+    month: number;
+    day: number;
+  };
+  delivery_emails: AgentRecipientEmail[];
+  last_run: string | null;
+  next_run: string | null;
+}
+
 export interface AgentExecutionLog {
   _id: string;
   user_id: string;
@@ -375,9 +387,13 @@ export const api = {
     }),
 
   // --- Bill Management ---
-  uploadBill: async (file: File): Promise<BillData> => {
+  uploadBill: async (file: File | File[]): Promise<BillData> => {
     const formData = new FormData();
-    formData.append('file', file);
+    if (Array.isArray(file)) {
+      file.forEach((f) => formData.append('file', f));
+    } else {
+      formData.append('file', file);
+    }
     const res = await request<any>('/upload', {
       method: 'POST',
       body: formData,
@@ -603,6 +619,69 @@ export const api = {
       headers['Authorization'] = `Bearer ${token}`;
     }
     const response = await fetch(`${API_BASE}/agents/monthly-report/reports/${fileId}`, {
+      method: 'GET',
+      headers,
+    });
+    if (!response.ok) {
+      throw new Error('Failed to download report PDF');
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  // --- Yearly AI Agent Settings ---
+  getYearlyAgentSettings: () =>
+    request<YearlyAgentSettings>('/agents/yearly-report/settings', {
+      method: 'GET',
+    }),
+
+  updateYearlyAgentSettings: (payload: { is_enabled?: boolean; month?: number; day?: number }) =>
+    request<YearlyAgentSettings>('/agents/yearly-report/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  addYearlyAgentRecipient: (email: string) =>
+    request<YearlyAgentSettings>('/agents/yearly-report/emails', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  toggleYearlyAgentRecipient: (email: string, is_enabled: boolean) =>
+    request<YearlyAgentSettings>('/agents/yearly-report/emails/toggle', {
+      method: 'PUT',
+      body: JSON.stringify({ email, is_enabled }),
+    }),
+
+  removeYearlyAgentRecipient: (email: string) =>
+    request<YearlyAgentSettings>(`/agents/yearly-report/emails/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+    }),
+
+  triggerYearlyAgent: () =>
+    request<{ status: 'success' | 'failed'; message: string }>('/agents/yearly-report/trigger', {
+      method: 'POST',
+    }),
+
+  getYearlyAgentLogs: () =>
+    request<AgentExecutionLog[]>('/agents/yearly-report/logs', {
+      method: 'GET',
+    }),
+
+  downloadYearlyAgentReport: async (fileId: string, filename = 'yearly_report.pdf') => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(`${API_BASE}/agents/yearly-report/reports/${fileId}`, {
       method: 'GET',
       headers,
     });

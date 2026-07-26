@@ -2,10 +2,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { api, BillData, Category } from '../services/api.ts';
-import { X, Upload, File, Loader2, Check, AlertCircle, Edit, FileText } from 'lucide-react';
+import { X, Upload, File, Loader2, Check, AlertCircle, Edit, FileText, FolderOpen } from 'lucide-react';
 import ExtractionReview from './ExtractionReview.tsx';
 
-type UploadStep = 'idle' | 'uploading' | 'review' | 'error' | 'batch_review' | 'batch_result';
+type UploadStep = 'idle' | 'uploading' | 'review' | 'error' | 'batch_review' | 'batch_result' | 'multiple_choice';
 
 interface BatchSummary {
   total: number;
@@ -19,8 +19,9 @@ const UploadModal: React.FC = () => {
   const { setUploadModalOpen, addNotification } = useApp();
   const [step, setStep] = useState<UploadStep>('idle');
   const [file, setFile] = useState<File | null>(null);
+  const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
   const [batchCount, setBatchCount] = useState(0);
-  
+
   // OCR processing states
   const [procStep, setProcStep] = useState(1); // 1: Reading text, 2: Extracting details
   const [extractedData, setExtractedData] = useState<BillData | null>(null);
@@ -32,6 +33,7 @@ const UploadModal: React.FC = () => {
   const [batchBills, setBatchBills] = useState<{ filename: string; bill_data: BillData }[]>([]);
   const [reviewIndex, setReviewIndex] = useState<number | null>(null);
   const [savingBatch, setSavingBatch] = useState(false);
+  const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -62,19 +64,19 @@ const UploadModal: React.FC = () => {
     e.preventDefault();
     setIsDragOver(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processSelectedFiles(Array.from(e.dataTransfer.files));
+      processSelectedFiles(Array.from(e.dataTransfer.files), false);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processSelectedFiles(Array.from(e.target.files));
+      processSelectedFiles(Array.from(e.target.files), false);
     }
   };
 
   const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      processSelectedFiles(Array.from(e.target.files));
+      processSelectedFiles(Array.from(e.target.files), true);
     }
   };
 
@@ -86,7 +88,7 @@ const UploadModal: React.FC = () => {
     }).format(val);
   };
 
-  const processSelectedFiles = async (selectedFiles: File[]) => {
+  const processSelectedFiles = async (selectedFiles: File[], isFolder = false) => {
     const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.pdf'];
     const validFiles = selectedFiles.filter(file => {
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
@@ -98,55 +100,65 @@ const UploadModal: React.FC = () => {
       return;
     }
 
-    // Single file flow (preserves review and edit control)
     if (validFiles.length === 1) {
-      const selectedFile = validFiles[0];
-      setFile(selectedFile);
-      setStep('uploading');
-      setProcStep(1);
-
-      try {
-        setTimeout(() => setProcStep(2), 1500);
-        
-        const parsedData = await api.uploadBill(selectedFile);
-        
-        const sanitized: BillData = {
-          ...parsedData,
-          invoice_no: parsedData.invoice_no || Math.floor(1000 + Math.random() * 9000).toString(),
-          date: parsedData.date || new Date().toISOString().split('T')[0],
-          category: parsedData.category || 'Paint',
-          items: parsedData.items || []
-        };
-
-        setTimeout(() => {
-          setExtractedData(sanitized);
-          setStep('review');
-        }, 3000);
-      } catch (err: any) {
-        console.error(err);
-        setErrorMsg(err.message || 'Invoice extraction failed. Please review file format.');
-        setStep('error');
-        addNotification(`Failed to extract text from ${selectedFile.name}`, 'failed');
+      setFile(validFiles[0]);
+      setFilesToUpload([validFiles[0]]);
+      runSingleInvoiceExtraction([validFiles[0]]);
+    } else {
+      setFilesToUpload(validFiles);
+      if (isFolder) {
+        runBatchInvoiceExtraction(validFiles);
+      } else {
+        setStep('multiple_choice');
       }
-      return;
     }
+  };
 
-    // Batch / Folder Upload Flow
+  const runSingleInvoiceExtraction = async (files: File[]) => {
+    // If it's a multi-page single bill, show the primary file name for the loading stepper
+    setFile(files[0]);
+    setStep('uploading');
+    setProcStep(1);
+
+    try {
+      setTimeout(() => setProcStep(2), 1500);
+
+      const parsedData = await api.uploadBill(files.length === 1 ? files[0] : files);
+
+      const sanitized: BillData = {
+        ...parsedData,
+        invoice_no: parsedData.invoice_no || Math.floor(1000 + Math.random() * 9000).toString(),
+        date: parsedData.date || new Date().toISOString().split('T')[0],
+        category: parsedData.category || 'Paint',
+        items: parsedData.items || []
+      };
+
+      setTimeout(() => {
+        setExtractedData(sanitized);
+        setStep('review');
+      }, 3000);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Invoice extraction failed. Please review file format.');
+      setStep('error');
+      addNotification(`Failed to extract text from ${files.map(f => f.name).join(', ')}`, 'failed');
+    }
+  };
+
+  const runBatchInvoiceExtraction = async (files: File[]) => {
     setFile(null);
-    setBatchCount(validFiles.length);
+    setBatchCount(files.length);
     setStep('uploading');
 
     try {
-      // Hit batch processing endpoint
-      const batchRes = await api.uploadBatchBills(validFiles);
-      
+      const batchRes = await api.uploadBatchBills(files);
+
       const parsedBills: typeof batchBills = [];
       let failCount = 0;
       const errorList: BatchSummary['errorList'] = [];
-      
+
       const defaultCategory = categories[0]?.name || 'Paint';
 
-      // Load parsed bills into local state for verification before saving
       for (const res of batchRes.results) {
         if (res.success && res.bill_data) {
           const sanitized: BillData = {
@@ -171,7 +183,7 @@ const UploadModal: React.FC = () => {
 
       setBatchBills(parsedBills);
       setBatchSummary({
-        total: validFiles.length,
+        total: files.length,
         successCount: 0,
         failCount,
         savedList: [],
@@ -181,14 +193,14 @@ const UploadModal: React.FC = () => {
       if (parsedBills.length > 0) {
         setStep('batch_review');
       } else {
-        setStep('batch_result'); // Show results instantly if all files failed processing
+        setStep('batch_result');
       }
 
     } catch (batchErr: any) {
       console.error(batchErr);
       setErrorMsg(batchErr.message || 'Batch processing failed. Please try again.');
       setStep('error');
-      addNotification(`Batch upload of ${validFiles.length} files failed`, 'failed');
+      addNotification(`Batch upload of ${files.length} files failed`, 'failed');
     }
   };
 
@@ -227,13 +239,68 @@ const UploadModal: React.FC = () => {
     });
   };
 
+  const handleMergeSelected = () => {
+    if (selectedRowIndexes.length < 2) return;
+
+    // Sort selected indexes descending to remove them correctly from list without index shift issues
+    const sortedIndexes = [...selectedRowIndexes].sort((a, b) => b - a);
+    const targetIdx = sortedIndexes[sortedIndexes.length - 1]; // Target is the first selected index in ascending order
+
+    setBatchBills(prev => {
+      const copy = [...prev];
+      const target = { ...copy[targetIdx] };
+      const targetBill = { ...target.bill_data };
+
+      let mergedItems = [...(targetBill.items || [])];
+      let mergedFilenames = [target.filename];
+      let sumSubtotal = targetBill.subtotal || 0;
+      let sumGst = targetBill.gst || 0;
+      let sumTotal = targetBill.total || 0;
+
+      // Merge other selected files into target index
+      for (const idx of sortedIndexes) {
+        if (idx === targetIdx) continue;
+        const source = copy[idx];
+        const sourceBill = source.bill_data;
+
+        mergedItems = [...mergedItems, ...(sourceBill.items || [])];
+        mergedFilenames.push(source.filename);
+        sumSubtotal += (sourceBill.subtotal || 0);
+        sumGst += (sourceBill.gst || 0);
+        sumTotal += (sourceBill.total || 0);
+      }
+
+      targetBill.items = mergedItems;
+      targetBill.subtotal = Number(sumSubtotal.toFixed(2));
+      targetBill.gst = Number(sumGst.toFixed(2));
+      targetBill.total = Number(sumTotal.toFixed(2));
+      targetBill.bill_image = mergedFilenames.join(', ');
+
+      target.bill_data = targetBill;
+      target.filename = mergedFilenames.join(', ');
+
+      copy[targetIdx] = target;
+
+      // Remove source bills from list in descending order
+      for (const idx of sortedIndexes) {
+        if (idx === targetIdx) continue;
+        copy.splice(idx, 1);
+      }
+
+      return copy;
+    });
+
+    addNotification(`Merged ${selectedRowIndexes.length} invoice files successfully.`, 'info');
+    setSelectedRowIndexes([]);
+  };
+
   const handleSaveAllBatch = async () => {
     if (!batchSummary) return;
-    
+
     setSavingBatch(true);
     setStep('uploading');
     setFile(null); // Shows batch loading spinner
-    
+
     let successCount = 0;
     let failCount = batchSummary.failCount;
     const savedList: BatchSummary['savedList'] = [];
@@ -266,7 +333,7 @@ const UploadModal: React.FC = () => {
       savedList,
       errorList
     });
-    
+
     setSavingBatch(false);
     setStep('batch_result');
     addNotification(`Batch upload complete: ${successCount} saved, ${failCount} failed.`, 'info');
@@ -285,7 +352,7 @@ const UploadModal: React.FC = () => {
 
   return (
     <div className="modal-backdrop">
-      <div 
+      <div
         className="modal-content glass-panel animate-scale-in"
         style={{ maxWidth: reviewIndex !== null ? '960px' : (step === 'review' || step === 'batch_review' || step === 'batch_result' ? '960px' : '580px') }}
       >
@@ -330,24 +397,24 @@ const UploadModal: React.FC = () => {
             {/* Drop Area Step */}
             {step === 'idle' && (
               <div className="animate-fade-in">
-                <div 
+                <div
                   className={`upload-drop-area ${isDragOver ? 'dragover' : ''}`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
                     style={{ display: 'none' }}
                     accept=".jpg,.jpeg,.png,.webp,.pdf"
                     multiple
                   />
-                  <input 
-                    type="file" 
-                    ref={folderInputRef} 
-                    onChange={handleFolderChange} 
+                  <input
+                    type="file"
+                    ref={folderInputRef}
+                    onChange={handleFolderChange}
                     style={{ display: 'none' }}
                     {...({
                       webkitdirectory: "",
@@ -366,33 +433,99 @@ const UploadModal: React.FC = () => {
                       JPG, JPEG, PNG, WebP or PDF · multiple files supported
                     </p>
                   </div>
-                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <button
+                      type="button"
                       onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.75rem 1.25rem',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 18px rgba(37, 99, 235, 0.35)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'none';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.25)';
+                      }}
                     >
+                      <File size={16} />
                       Choose Files
                     </button>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
+
+                    <button
+                      type="button"
                       onClick={() => folderInputRef.current?.click()}
+                      style={{
+                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.75rem 1.25rem',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 18px rgba(37, 99, 235, 0.35)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'none';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.25)';
+                      }}
                     >
+                      <FolderOpen size={16} />
                       Choose Folder
                     </button>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
+
+                    <button
+                      type="button"
                       onClick={handleManualEntry}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                      style={{
+                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '0.75rem 1.25rem',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 18px rgba(37, 99, 235, 0.35)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'none';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.25)';
+                      }}
                     >
                       <FileText size={16} />
                       Add Invoice Manually
                     </button>
                   </div>
                 </div>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginTop: '2rem' }}>
                   <div className="premium-card" style={{ padding: '1rem', background: 'transparent' }}>
                     <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '1.1rem' }}>01</span>
@@ -406,6 +539,46 @@ const UploadModal: React.FC = () => {
                     <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '1.1rem' }}>03</span>
                     <p style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Review before saving items</p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Multiple Files Choice Step */}
+            {step === 'multiple_choice' && (
+              <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1rem 0' }}>
+                <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-md)', padding: '1.25rem', background: 'var(--bg-app)', textAlign: 'center' }}>
+                  <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Multiple Files Selected ({filesToUpload.length} files)</h4>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    Please choose how you would like to process these documents. You can combine them as a single multi-page invoice or upload them as a batch of separate invoices.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => runSingleInvoiceExtraction(filesToUpload)}
+                    style={{ padding: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', height: 'auto', border: '1px solid var(--primary)' }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Combine into One Invoice</span>
+                    <span style={{ fontSize: '0.75rem', opacity: 0.85, fontWeight: 400 }}>Recommended for multi-page invoices</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => runBatchInvoiceExtraction(filesToUpload)}
+                    style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', height: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Process as Separate Invoices</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>Recommended for folder uploads containing different bills</span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                  <button className="btn btn-secondary" onClick={() => setStep('idle')} style={{ flex: 1 }}>
+                    Cancel & Back
+                  </button>
                 </div>
               </div>
             )}
@@ -472,7 +645,7 @@ const UploadModal: React.FC = () => {
                         {savingBatch ? `Saving batch of ${batchBills.length} invoices` : `Processing batch of ${batchCount} files`}
                       </h4>
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '400px', lineHeight: 1.5 }}>
-                        {savingBatch 
+                        {savingBatch
                           ? 'Writing invoice records and products data to MongoDB. Please do not close the window.'
                           : 'Uploading documents and running OCR text extraction + AI analysis in parallel.'}
                       </p>
@@ -490,8 +663,8 @@ const UploadModal: React.FC = () => {
 
             {/* Detailed Extraction Form Review Step */}
             {step === 'review' && extractedData && (
-              <ExtractionReview 
-                initialData={extractedData} 
+              <ExtractionReview
+                initialData={extractedData}
                 fileName={file?.name || 'Manual Entry'}
                 onSave={handleReviewSave}
                 onCancel={() => setStep('idle')}
@@ -505,16 +678,43 @@ const UploadModal: React.FC = () => {
                   <div>
                     <h4 style={{ fontSize: '1.05rem', fontWeight: 600 }}>Review extracted invoices ({batchBills.length} files)</h4>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                      Please select categories for each bill. You can edit line items or details before saving.
+                      Please select categories for each bill. Select rows with checkboxes to merge pages together.
                     </p>
                   </div>
-                  <span className="badge badge-warning" style={{ textTransform: 'none' }}>Verification Required</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {selectedRowIndexes.length >= 2 && (
+                      <button
+                        type="button"
+                        className="btn btn-primary animate-fade-in"
+                        onClick={handleMergeSelected}
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', height: 'auto', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid var(--primary)' }}
+                      >
+                        <FileText size={14} />
+                        <span>Merge Selected ({selectedRowIndexes.length})</span>
+                      </button>
+                    )}
+                    <span className="badge badge-warning" style={{ textTransform: 'none' }}>Verification Required</span>
+                  </div>
                 </div>
 
                 <div style={{ overflowX: 'auto', maxHeight: '340px', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-md)' }}>
                   <table className="premium-table" style={{ margin: 0 }}>
                     <thead>
                       <tr>
+                        <th style={{ width: '40px', paddingLeft: '1rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedRowIndexes.length === batchBills.length && batchBills.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRowIndexes(batchBills.map((_, i) => i));
+                              } else {
+                                setSelectedRowIndexes([]);
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </th>
                         <th>Filename</th>
                         <th>Supplier / Invoice No</th>
                         <th>Invoice Date</th>
@@ -524,43 +724,60 @@ const UploadModal: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {batchBills.map((item, idx) => (
-                        <tr key={idx}>
-                          <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>
-                            <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }} title={item.filename}>
-                              {item.filename}
-                            </div>
-                          </td>
-                          <td>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.bill_data.dealer_name}</span>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{item.bill_data.invoice_no}</div>
-                          </td>
-                          <td style={{ fontSize: '0.85rem' }}>{item.bill_data.date}</td>
-                          <td style={{ fontWeight: 700 }}>{formatCurrency(item.bill_data.total)}</td>
-                          <td>
-                            <select 
-                              value={item.bill_data.category} 
-                              onChange={(e) => handleBatchCategoryChange(idx, e.target.value)}
-                              className="input-field"
-                              style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem', height: 'auto', minHeight: 'unset' }}
-                            >
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.name}>{cat.name}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button 
-                              className="btn btn-secondary" 
-                              onClick={() => setReviewIndex(idx)}
-                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}
-                            >
-                              <Edit size={12} />
-                              <span>Edit</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {batchBills.map((item, idx) => {
+                        const isChecked = selectedRowIndexes.includes(idx);
+                        return (
+                          <tr key={idx} style={{ background: isChecked ? 'rgba(var(--primary-rgb), 0.05)' : undefined }}>
+                            <td style={{ paddingLeft: '1rem' }}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedRowIndexes(prev => [...prev, idx]);
+                                  } else {
+                                    setSelectedRowIndexes(prev => prev.filter(i => i !== idx));
+                                  }
+                                }}
+                                style={{ cursor: 'pointer' }}
+                              />
+                            </td>
+                            <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                              <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }} title={item.filename}>
+                                {item.filename}
+                              </div>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{item.bill_data.dealer_name}</span>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>#{item.bill_data.invoice_no}</div>
+                            </td>
+                            <td style={{ fontSize: '0.85rem' }}>{item.bill_data.date}</td>
+                            <td style={{ fontWeight: 700 }}>{formatCurrency(item.bill_data.total)}</td>
+                            <td>
+                              <select
+                                value={item.bill_data.category}
+                                onChange={(e) => handleBatchCategoryChange(idx, e.target.value)}
+                                className="input-field"
+                                style={{ padding: '0.3rem 0.5rem', fontSize: '0.85rem', height: 'auto', minHeight: 'unset' }}
+                              >
+                                {categories.map((cat) => (
+                                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => setReviewIndex(idx)}
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}
+                              >
+                                <Edit size={12} />
+                                <span>Edit</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -1,6 +1,6 @@
 // src/pages/AiAgentsPage.tsx
 import React, { useState, useEffect } from 'react';
-import { api, AgentSettings, AgentExecutionLog } from '../services/api.ts';
+import { api, AgentSettings, YearlyAgentSettings, AgentExecutionLog, AgentRecipientEmail } from '../services/api.ts';
 import { useApp } from '../context/AppContext.tsx';
 import { 
   Cpu, 
@@ -21,6 +21,7 @@ const AiAgentsPage: React.FC = () => {
 
   // Settings states
   const [settings, setSettings] = useState<AgentSettings | null>(null);
+  const [yearlySettings, setYearlySettings] = useState<YearlyAgentSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState<boolean>(true);
   const [savingSettings, setSavingSettings] = useState<boolean>(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -28,6 +29,11 @@ const AiAgentsPage: React.FC = () => {
   // Day of Month & enabled form states
   const [dayOfMonth, setDayOfMonth] = useState<number>(2);
   const [agentEnabled, setAgentEnabled] = useState<boolean>(true);
+
+  // Yearly Agent scheduling & enabled states
+  const [yearlyMonth, setYearlyMonth] = useState<number>(1);
+  const [yearlyDay, setYearlyDay] = useState<number>(15);
+  const [yearlyAgentEnabled, setYearlyAgentEnabled] = useState<boolean>(true);
 
   // Email input state
   const [newEmail, setNewEmail] = useState<string>('');
@@ -81,10 +87,18 @@ const AiAgentsPage: React.FC = () => {
   const fetchSettings = async () => {
     try {
       setSettingsLoading(true);
-      const data = await api.getAgentSettings();
-      setSettings(data);
-      setDayOfMonth(data.schedule_config?.day_of_month || 2);
-      setAgentEnabled(data.is_enabled);
+      const [monthlyData, yearlyData] = await Promise.all([
+        api.getAgentSettings(),
+        api.getYearlyAgentSettings()
+      ]);
+      setSettings(monthlyData);
+      setDayOfMonth(monthlyData.schedule_config?.day_of_month || 2);
+      setAgentEnabled(monthlyData.is_enabled);
+
+      setYearlySettings(yearlyData);
+      setYearlyMonth(yearlyData.schedule_config?.month || 1);
+      setYearlyDay(yearlyData.schedule_config?.day || 15);
+      setYearlyAgentEnabled(yearlyData.is_enabled);
     } catch (err) {
       console.error('Failed to load agent settings:', err);
       addNotification('Could not load AI Agent settings.', 'failed');
@@ -95,9 +109,12 @@ const AiAgentsPage: React.FC = () => {
 
   // Fetch Execution Logs
   const fetchLogs = async () => {
+    if (!selectedAgentId) return;
     try {
       setLogsLoading(true);
-      const data = await api.getAgentLogs();
+      const data = selectedAgentId === 'monthly_report'
+        ? await api.getAgentLogs()
+        : await api.getYearlyAgentLogs();
       // Sort logs descending by run date (latest first)
       const sortedLogs = data.sort((a, b) => 
         new Date(b.run_at).getTime() - new Date(a.run_at).getTime()
@@ -112,11 +129,16 @@ const AiAgentsPage: React.FC = () => {
 
   useEffect(() => {
     fetchSettings();
-    fetchLogs();
   }, []);
 
-  // Update Scheduler settings (enabled & day of month)
-  const saveSchedulerSettings = async (enabled: boolean, day: number) => {
+  useEffect(() => {
+    if (selectedAgentId) {
+      fetchLogs();
+    }
+  }, [selectedAgentId]);
+
+  // Update Scheduler settings for Monthly Agent (enabled & day of month)
+  const saveMonthlySchedulerSettings = async (enabled: boolean, day: number) => {
     try {
       setSavingSettings(true);
       const updated = await api.updateAgentSettings({
@@ -126,7 +148,7 @@ const AiAgentsPage: React.FC = () => {
       setSettings(updated);
       setAgentEnabled(updated.is_enabled);
       setDayOfMonth(updated.schedule_config?.day_of_month || 2);
-      addNotification('AI Agent scheduler settings updated successfully.', 'ready');
+      addNotification('Monthly Agent scheduler settings updated successfully.', 'ready');
     } catch (err: any) {
       console.error(err);
       showAlertDialog('Update Failed', err.message || 'Failed to update scheduler settings');
@@ -139,20 +161,56 @@ const AiAgentsPage: React.FC = () => {
     }
   };
 
+  // Update Scheduler settings for Yearly Agent (enabled, month, day)
+  const saveYearlySchedulerSettings = async (enabled: boolean, month: number, day: number) => {
+    try {
+      setSavingSettings(true);
+      const updated = await api.updateYearlyAgentSettings({
+        is_enabled: enabled,
+        month: month,
+        day: day
+      });
+      setYearlySettings(updated);
+      setYearlyAgentEnabled(updated.is_enabled);
+      setYearlyMonth(updated.schedule_config?.month || 1);
+      setYearlyDay(updated.schedule_config?.day || 15);
+      addNotification('Yearly Agent scheduler settings updated successfully.', 'ready');
+    } catch (err: any) {
+      console.error(err);
+      showAlertDialog('Update Failed', err.message || 'Failed to update scheduler settings');
+      if (yearlySettings) {
+        setYearlyAgentEnabled(yearlySettings.is_enabled);
+        setYearlyMonth(yearlySettings.schedule_config?.month || 1);
+        setYearlyDay(yearlySettings.schedule_config?.day || 15);
+      }
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await saveSchedulerSettings(agentEnabled, dayOfMonth);
+    if (selectedAgentId === 'monthly_report') {
+      await saveMonthlySchedulerSettings(agentEnabled, dayOfMonth);
+    } else if (selectedAgentId === 'yearly_report') {
+      await saveYearlySchedulerSettings(yearlyAgentEnabled, yearlyMonth, yearlyDay);
+    }
   };
 
   // Add Recipient Email
   const handleAddEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail.trim()) return;
+    if (!newEmail.trim() || !selectedAgentId) return;
     setEmailError(null);
     try {
       setEmailLoading(true);
-      const updated = await api.addAgentRecipient(newEmail.trim());
-      setSettings(updated);
+      if (selectedAgentId === 'monthly_report') {
+        const updated = await api.addAgentRecipient(newEmail.trim());
+        setSettings(updated);
+      } else {
+        const updated = await api.addYearlyAgentRecipient(newEmail.trim());
+        setYearlySettings(updated);
+      }
       setNewEmail('');
       addNotification('Email recipient added successfully.', 'ready');
     } catch (err: any) {
@@ -165,9 +223,15 @@ const AiAgentsPage: React.FC = () => {
 
   // Toggle Email Recipient Delivery
   const handleToggleEmail = async (email: string, currentStatus: boolean) => {
+    if (!selectedAgentId) return;
     try {
-      const updated = await api.toggleAgentRecipient(email, !currentStatus);
-      setSettings(updated);
+      if (selectedAgentId === 'monthly_report') {
+        const updated = await api.toggleAgentRecipient(email, !currentStatus);
+        setSettings(updated);
+      } else {
+        const updated = await api.toggleYearlyAgentRecipient(email, !currentStatus);
+        setYearlySettings(updated);
+      }
       addNotification(`Delivery state updated for ${email}.`, 'ready');
     } catch (err: any) {
       console.error(err);
@@ -177,13 +241,19 @@ const AiAgentsPage: React.FC = () => {
 
   // Remove Recipient Email
   const handleRemoveEmail = (email: string) => {
+    if (!selectedAgentId) return;
     showConfirmDialog(
       'Remove Recipient',
       `Are you sure you want to remove ${email} from the distribution list?`,
       async () => {
         try {
-          const updated = await api.removeAgentRecipient(email);
-          setSettings(updated);
+          if (selectedAgentId === 'monthly_report') {
+            const updated = await api.removeAgentRecipient(email);
+            setSettings(updated);
+          } else {
+            const updated = await api.removeYearlyAgentRecipient(email);
+            setYearlySettings(updated);
+          }
           addNotification('Email recipient removed.', 'ready');
         } catch (err: any) {
           console.error(err);
@@ -193,14 +263,50 @@ const AiAgentsPage: React.FC = () => {
     );
   };
 
+  // Trigger immediate run
+  const [triggeringAgent, setTriggeringAgent] = useState<boolean>(false);
+  
+  const handleTriggerAgent = async () => {
+    if (!selectedAgentId) return;
+    showConfirmDialog(
+      'Trigger Agent Run',
+      'Are you sure you want to trigger the agent to compile and execute the report immediately in the background? This process may take a few minutes.',
+      async () => {
+        try {
+          setTriggeringAgent(true);
+          const result = selectedAgentId === 'monthly_report'
+            ? await api.triggerAgent()
+            : await api.triggerYearlyAgent();
+          if (result.status === 'success') {
+            addNotification('AI Agent execution triggered successfully in the background.', 'ready');
+            // Refresh logs after a short delay
+            setTimeout(() => fetchLogs(), 3000);
+          } else {
+            showAlertDialog('Trigger Failed', result.message || 'Failed to trigger agent run.');
+          }
+        } catch (err: any) {
+          console.error(err);
+          showAlertDialog('Trigger Failed', err.message || 'Failed to trigger agent run.');
+        } finally {
+          setTriggeringAgent(false);
+        }
+      }
+    );
+  };
 
   // Download PDF file
   const handleDownloadReport = async (fileId: string, runDateStr: string) => {
+    if (!selectedAgentId) return;
     try {
       const date = new Date(runDateStr);
-      const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const filename = `ProcureIQ_Monthly_Report_${formattedDate}.pdf`;
-      await api.downloadAgentReport(fileId, filename);
+      if (selectedAgentId === 'monthly_report') {
+        const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const filename = `ProcureIQ_Monthly_Report_${formattedDate}.pdf`;
+        await api.downloadAgentReport(fileId, filename);
+      } else {
+        const filename = `ProcureIQ_Yearly_Report_${date.getFullYear()}.pdf`;
+        await api.downloadYearlyAgentReport(fileId, filename);
+      }
       addNotification('PDF Report downloaded successfully.', 'ready');
     } catch (err: any) {
       console.error(err);
@@ -222,7 +328,9 @@ const AiAgentsPage: React.FC = () => {
   };
 
   // Limit checks (max 5 emails total including primary)
-  const deliveryEmails = settings?.delivery_emails || [];
+  const deliveryEmails: AgentRecipientEmail[] = selectedAgentId === 'monthly_report' 
+    ? (settings?.delivery_emails || []) 
+    : (yearlySettings?.delivery_emails || []);
   const maxEmailsLimit = 5;
   const isLimitReached = deliveryEmails.length >= maxEmailsLimit;
 
@@ -303,7 +411,7 @@ const AiAgentsPage: React.FC = () => {
                     e.currentTarget.style.transform = 'none';
                   }}
                 >
-                  <div style={{ position: 'relative', height: '180px', width: '100%' }}>
+                  <div style={{ position: 'relative', height: '220px', width: '100%' }}>
                     <img 
                       src="/images/monthly_agent.jpeg" 
                       alt="Monthly Report Sender Agent" 
@@ -319,7 +427,7 @@ const AiAgentsPage: React.FC = () => {
                   </div>
                   <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flexGrow: 1 }}>
                     <h3 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>
-                      Monthly Report Sender
+                      Monthly Business Intelligence Agent
                     </h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
                       Generates and emails PDF summaries to your team distribution list.
@@ -330,40 +438,57 @@ const AiAgentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Agent Card 2: Price Watcher Agent (Coming Soon) */}
-                {/* Agent Card 2: Price Watcher Agent (Coming Soon) */}
+                {/* Agent Card 2: Yearly Business Intelligence Agent */}
                 <div 
+                  onClick={() => setSelectedAgentId('yearly_report')}
                   className="premium-card"
                   style={{
+                    cursor: 'pointer',
                     border: '1px solid var(--border-color)',
-                    opacity: 0.55,
                     background: 'var(--bg-card)',
+                    transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
                     display: 'flex',
                     flexDirection: 'column',
                     borderRadius: 'var(--border-radius-md)',
                     overflow: 'hidden',
-                    padding: 0,
-                    minHeight: '335px',
-                    justifyContent: 'center',
-                    alignItems: 'center'
+                    padding: 0
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--primary)';
+                    e.currentTarget.style.boxShadow = '0 10px 25px rgba(99, 102, 241, 0.15)';
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.boxShadow = 'none';
+                    e.currentTarget.style.transform = 'none';
                   }}
                 >
-                  <div style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '1rem'
-                  }}>
-                    <Cpu size={30} style={{ color: 'var(--text-muted)' }} />
+                  <div style={{ position: 'relative', height: '220px', width: '100%' }}>
+                    <img 
+                      src="/images/yearly_agents.jpeg" 
+                      alt="Yearly Business Intelligence Agent" 
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                    <span className={`badge ${yearlySettings?.is_enabled ? 'badge-success' : 'badge-danger'}`} style={{ position: 'absolute', top: '1rem', right: '1rem', margin: 0 }}>
+                      {yearlySettings?.is_enabled ? 'Active' : 'Disabled'}
+                    </span>
                   </div>
-                  <span className="badge badge-warning" style={{ margin: 0, padding: '0.4rem 1rem', fontSize: '0.8rem' }}>
-                    Coming Soon
-                  </span>
+                  <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flexGrow: 1 }}>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>
+                      Yearly Business Intelligence Agent
+                    </h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.45, margin: 0 }}>
+                      Aggregates annual spend, tracks unit price fluctuations, and forecasts budgets.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Configure Settings →</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Agent Card 3: Supplier Scout Agent (Coming Soon) */}
@@ -378,7 +503,7 @@ const AiAgentsPage: React.FC = () => {
                     borderRadius: 'var(--border-radius-md)',
                     overflow: 'hidden',
                     padding: 0,
-                    minHeight: '335px',
+                    minHeight: '375px',
                     justifyContent: 'center',
                     alignItems: 'center'
                   }}
@@ -442,7 +567,7 @@ const AiAgentsPage: React.FC = () => {
                     />
                     <div>
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0 }}>
-                        Monthly Report Sender Agent Configuration
+                        Monthly Business Intelligence Agent Configuration
                       </h3>
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
                         Configure the scheduling trigger, team notification emails, and configurations.
@@ -492,7 +617,7 @@ const AiAgentsPage: React.FC = () => {
                               onChange={(e) => {
                                 const val = e.target.checked;
                                 setAgentEnabled(val);
-                                saveSchedulerSettings(val, dayOfMonth);
+                                saveMonthlySchedulerSettings(val, dayOfMonth);
                               }} 
                               disabled={savingSettings}
                             />
@@ -512,7 +637,7 @@ const AiAgentsPage: React.FC = () => {
                           onChange={(e) => {
                             const val = parseInt(e.target.value);
                             setDayOfMonth(val);
-                            saveSchedulerSettings(agentEnabled, val);
+                            saveMonthlySchedulerSettings(agentEnabled, val);
                           }} 
                           className="input-field"
                           style={{ marginTop: '0.5rem' }}
@@ -680,7 +805,7 @@ const AiAgentsPage: React.FC = () => {
                     </div>
 
                     {/* Actions / Save Settings Row */}
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                       <button 
                         type="submit" 
                         className="btn btn-primary"
@@ -689,6 +814,328 @@ const AiAgentsPage: React.FC = () => {
                       >
                         {savingSettings ? <RefreshCw className="animate-spin" size={16} /> : <Check size={16} />}
                         <span>Save Scheduler Settings</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        className="btn btn-secondary"
+                        onClick={handleTriggerAgent}
+                        disabled={triggeringAgent}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                      >
+                        {triggeringAgent ? <RefreshCw className="animate-spin" size={16} /> : <Cpu size={16} />}
+                        <span>Compile & Run Now</span>
+                      </button>
+                    </div>
+
+                  </form>
+
+                </div>
+              )}
+
+              {/* Configurations Card for Yearly Agent */}
+              {selectedAgentId === 'yearly_report' && (
+                <div className="premium-card" style={{ padding: '2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.25rem', marginBottom: '1.5rem' }}>
+                    <img 
+                      src="/images/yearly_agents.jpeg" 
+                      alt="Yearly Business Intelligence Agent" 
+                      style={{
+                        width: '56px',
+                        height: '56px',
+                        borderRadius: '10px',
+                        objectFit: 'cover',
+                        border: '1.5px solid var(--border-color)'
+                      }}
+                    />
+                    <div>
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 600, margin: 0 }}>
+                        Yearly Business Intelligence Agent Configuration
+                      </h3>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                        Configure the yearly scheduling month and day trigger, email distribution lists, and forecast settings.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Agent status, next run times */}
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+                    gap: '1rem', 
+                    marginBottom: '2rem',
+                    padding: '1rem',
+                    backgroundColor: 'var(--bg-app)',
+                    borderRadius: 'var(--border-radius-sm)',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <Clock size={18} style={{ color: 'var(--primary)' }} />
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>LAST EXECUTION</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(yearlySettings?.last_run)}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <Calendar size={18} style={{ color: 'var(--secondary)' }} />
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>NEXT SCHEDULED RUN</div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(yearlySettings?.next_run)}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Configurations Form */}
+                  <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    
+                    {/* Scheduling Switch & Month/Day select */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem' }}>
+                      <div className="form-group" style={{ flex: 1, minWidth: '240px' }}>
+                        <label className="form-label">Agent Execution Trigger Status</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+                          <label className="agent-switch">
+                            <input 
+                              type="checkbox" 
+                              checked={yearlyAgentEnabled} 
+                              onChange={(e) => {
+                                const val = e.target.checked;
+                                setYearlyAgentEnabled(val);
+                                saveYearlySchedulerSettings(val, yearlyMonth, yearlyDay);
+                              }} 
+                              disabled={savingSettings}
+                            />
+                            <span className="agent-slider"></span>
+                          </label>
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: yearlyAgentEnabled ? 'var(--success)' : 'var(--text-muted)' }}>
+                            {yearlyAgentEnabled ? 'Enabled (Autonomous runs active)' : 'Disabled (Autonomous runs paused)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Month Selector dropdown */}
+                      <div className="form-group" style={{ width: '180px' }}>
+                        <label className="form-label" htmlFor="yearly-month-select">Month Scheduled</label>
+                        <select 
+                          id="yearly-month-select"
+                          value={yearlyMonth} 
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setYearlyMonth(val);
+                            saveYearlySchedulerSettings(yearlyAgentEnabled, val, yearlyDay);
+                          }} 
+                          className="input-field"
+                          style={{ marginTop: '0.5rem' }}
+                          disabled={savingSettings}
+                        >
+                          <option value={1}>January</option>
+                          <option value={2}>February</option>
+                          <option value={3}>March</option>
+                          <option value={4}>April</option>
+                          <option value={5}>May</option>
+                          <option value={6}>June</option>
+                          <option value={7}>July</option>
+                          <option value={8}>August</option>
+                          <option value={9}>September</option>
+                          <option value={10}>October</option>
+                          <option value={11}>November</option>
+                          <option value={12}>December</option>
+                        </select>
+                      </div>
+
+                      {/* Day Selector dropdown */}
+                      <div className="form-group" style={{ width: '180px' }}>
+                        <label className="form-label" htmlFor="yearly-day-select">Day Scheduled</label>
+                        <select 
+                          id="yearly-day-select"
+                          value={yearlyDay} 
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setYearlyDay(val);
+                            saveYearlySchedulerSettings(yearlyAgentEnabled, yearlyMonth, val);
+                          }} 
+                          className="input-field"
+                          style={{ marginTop: '0.5rem' }}
+                          disabled={savingSettings}
+                        >
+                          {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
+                            <option key={day} value={day}>Day {day}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Recipient Emails list */}
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <div>
+                          <h4 style={{ fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Mail size={16} style={{ color: 'var(--primary)' }} />
+                            Email Report Distribution List
+                          </h4>
+                          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            Recipients scheduled to receive reports. Maximum 5 total email recipients.
+                          </p>
+                        </div>
+                        <span className="badge badge-info" style={{ fontWeight: 600 }}>
+                          {deliveryEmails.length} / {maxEmailsLimit} Total
+                        </span>
+                      </div>
+
+                      {/* Email list elements */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                        {deliveryEmails.length === 0 ? (
+                          <p style={{ fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--text-muted)', padding: '0.5rem 0' }}>
+                            No recipients added yet.
+                          </p>
+                        ) : (
+                          deliveryEmails.map((item, index) => {
+                            const isPrimary = index === 0; // Assume first is primary user account email
+                            return (
+                              <div 
+                                key={item.email} 
+                                style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'space-between',
+                                  padding: '0.75rem 1rem',
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: 'var(--border-radius-sm)',
+                                  backgroundColor: isPrimary ? 'var(--primary-glow)' : 'var(--bg-card)',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <Mail size={16} style={{ color: item.is_enabled ? 'var(--primary)' : 'var(--text-muted)' }} />
+                                  <div>
+                                    <span style={{ 
+                                      fontSize: '0.9rem', 
+                                      fontWeight: isPrimary ? '600' : '400',
+                                      color: item.is_enabled ? 'var(--text-primary)' : 'var(--text-muted)',
+                                      textDecoration: item.is_enabled ? 'none' : 'line-through'
+                                    }}>
+                                      {item.email}
+                                    </span>
+                                    {isPrimary && (
+                                      <span className="badge badge-info" style={{ fontSize: '0.65rem', marginLeft: '0.5rem', padding: '0.1rem 0.4rem' }}>
+                                        Primary
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                  {/* Delivery Toggle check button */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <input 
+                                      type="checkbox" 
+                                      id={`toggle-yearly-email-${index}`}
+                                      checked={item.is_enabled}
+                                      onChange={() => handleToggleEmail(item.email, item.is_enabled)}
+                                      style={{ cursor: 'pointer' }}
+                                    />
+                                    <label htmlFor={`toggle-yearly-email-${index}`} style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+                                      {item.is_enabled ? 'Delivering' : 'Muted'}
+                                    </label>
+                                  </div>
+
+                                  {/* Delete recipient button */}
+                                  {!isPrimary && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleRemoveEmail(item.email)}
+                                      style={{ 
+                                        background: 'none', 
+                                        border: 'none', 
+                                        color: 'var(--danger)', 
+                                        cursor: 'pointer',
+                                        padding: '0.2rem',
+                                        borderRadius: '4px',
+                                        display: 'flex',
+                                        alignItems: 'center'
+                                      }}
+                                      title="Delete Recipient"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Add Email Recipient Form */}
+                      <div style={{ 
+                        backgroundColor: 'var(--bg-app)', 
+                        padding: '1rem', 
+                        borderRadius: 'var(--border-radius-sm)',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <div style={{ flex: 1, position: 'relative' }}>
+                            <input 
+                              type="email" 
+                              placeholder="Add partner or team email (e.g. finance@acme.com)..."
+                              value={newEmail}
+                              onChange={(e) => {
+                                setNewEmail(e.target.value);
+                                if (emailError) setEmailError(null);
+                              }}
+                              className="input-field"
+                              disabled={isLimitReached || emailLoading}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddEmail}
+                            disabled={isLimitReached || emailLoading || !newEmail.trim()}
+                            className="btn btn-secondary"
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}
+                          >
+                            {emailLoading ? <RefreshCw className="animate-spin" size={16} /> : <Plus size={16} />}
+                            <span>Add Email</span>
+                          </button>
+                        </div>
+
+                        {/* Error message under the input box */}
+                        {emailError && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)', marginTop: '0.75rem', fontSize: '0.82rem', fontWeight: 500 }} className="animate-fade-in">
+                            <AlertTriangle size={15} />
+                            <span>{emailError}</span>
+                          </div>
+                        )}
+
+                        {/* Limit indicator alerts */}
+                        {isLimitReached && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--warning)', marginTop: '0.75rem', fontSize: '0.82rem', fontWeight: 500 }}>
+                            <AlertTriangle size={15} />
+                            <span>You have reached the maximum limit of 5 email recipients.</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions / Save Settings Row */}
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      <button 
+                        type="submit" 
+                        className="btn btn-primary"
+                        disabled={savingSettings}
+                        style={{ minWidth: '160px' }}
+                      >
+                        {savingSettings ? <RefreshCw className="animate-spin" size={16} /> : <Check size={16} />}
+                        <span>Save Scheduler Settings</span>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        className="btn btn-secondary"
+                        onClick={handleTriggerAgent}
+                        disabled={triggeringAgent}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                      >
+                        {triggeringAgent ? <RefreshCw className="animate-spin" size={16} /> : <Cpu size={16} />}
+                        <span>Compile & Run Now</span>
                       </button>
                     </div>
 
@@ -700,7 +1147,7 @@ const AiAgentsPage: React.FC = () => {
           )}
 
           {/* Audit Logs panel */}
-          {selectedAgentId === 'monthly_report' && (
+          {selectedAgentId !== null && (
             <div className="premium-card animate-slide-up">
               <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.15rem' }}>
                 <Cpu size={18} style={{ color: 'var(--primary)' }} />
