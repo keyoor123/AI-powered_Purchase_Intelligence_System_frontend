@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { api } from '../services/api.ts';
 import { Lock, Mail, User, ArrowRight, RefreshCw, Key, Eye, EyeOff } from 'lucide-react';
 
-type Mode = 'login' | 'signup' | 'forgot' | 'reset';
+type Mode = 'login' | 'signup' | 'forgot' | 'reset' | 'verify';
 
 const LoginSignup: React.FC = () => {
-  const { login, signup } = useAuth();
+  const { login, signup, verifyEmail } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   
   // Form values
@@ -16,6 +16,8 @@ const LoginSignup: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
   
   // Visibility toggles
   const [showPassword, setShowPassword] = useState(false);
@@ -35,8 +37,23 @@ const LoginSignup: React.FC = () => {
     setMode(newMode);
     clearMessages();
     setPassword('');
+    setVerificationCode('');
     setShowPassword(false);
     setShowNewPassword(false);
+  };
+
+  const handleResendOtp = async () => {
+    clearMessages();
+    setSubmitting(true);
+    try {
+      if (!verificationEmail) throw new Error('Email is required to resend verification.');
+      const res = await api.resendVerification(verificationEmail);
+      setInfo(res.message || 'A new verification OTP code has been generated and logged.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend verification code.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,10 +64,26 @@ const LoginSignup: React.FC = () => {
     try {
       if (mode === 'login') {
         if (!email || !password) throw new Error('Please fill in all fields.');
-        await login(email, password);
+        try {
+          await login(email, password);
+        } catch (err: any) {
+          if (err.message && err.message.includes('not verified')) {
+            setVerificationEmail(email);
+            setMode('verify');
+            setInfo('Your email address is not verified yet. A verification code is required.');
+          } else {
+            throw err;
+          }
+        }
       } else if (mode === 'signup') {
         if (!email || !password || !displayName) throw new Error('Please fill in all fields.');
         await signup(email, password, displayName);
+        setVerificationEmail(email);
+        setMode('verify');
+        setInfo('Account registered successfully! Check backend console/logs for the 6-digit verification code.');
+      } else if (mode === 'verify') {
+        if (!verificationCode || verificationCode.length !== 6) throw new Error('Please enter the 6-digit OTP code.');
+        await verifyEmail(verificationEmail, verificationCode);
       } else if (mode === 'forgot') {
         if (!email) throw new Error('Please enter your email.');
         const res = await api.forgotPassword(email);
@@ -132,7 +165,7 @@ const LoginSignup: React.FC = () => {
             </div>
           )}
 
-          {mode !== 'reset' && (
+          {mode !== 'reset' && mode !== 'verify' && (
             <div className="form-group">
               <label className="form-label">Email Address</label>
               <div style={{ position: 'relative' }}>
@@ -147,6 +180,28 @@ const LoginSignup: React.FC = () => {
                   required
                 />
               </div>
+            </div>
+          )}
+
+          {mode === 'verify' && (
+            <div className="form-group animate-slide-up">
+              <label className="form-label">Verification OTP Code</label>
+              <div style={{ position: 'relative' }}>
+                <Key size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit OTP code"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value)}
+                  className="input-field"
+                  style={{ paddingLeft: '2.75rem' }}
+                  maxLength={6}
+                  required
+                />
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                Verifying: <strong>{verificationEmail}</strong>
+              </p>
             </div>
           )}
 
@@ -239,6 +294,7 @@ const LoginSignup: React.FC = () => {
                 <span>
                   {mode === 'login' && 'Sign In'}
                   {mode === 'signup' && 'Create Account'}
+                  {mode === 'verify' && 'Verify Account'}
                   {mode === 'forgot' && 'Send Reset Link'}
                   {mode === 'reset' && 'Reset Password'}
                 </span>
@@ -270,6 +326,26 @@ const LoginSignup: React.FC = () => {
         {mode === 'reset' && (
           <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
             <button
+              onClick={() => handleModeChange('login')}
+              style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.85rem', cursor: 'pointer' }}
+            >
+              Back to Sign In
+            </button>
+          </div>
+        )}
+
+        {mode === 'verify' && (
+          <div style={{ textAlign: 'center', marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={handleResendOtp}
+              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}
+              disabled={submitting}
+            >
+              Resend verification code
+            </button>
+            <button
+              type="button"
               onClick={() => handleModeChange('login')}
               style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '0.85rem', cursor: 'pointer' }}
             >
