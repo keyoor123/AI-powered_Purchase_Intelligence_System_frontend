@@ -1,21 +1,12 @@
 // src/services/api.ts
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
-function getToken(): string | null {
-  return localStorage.getItem('pulse_jwt_token');
-}
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function getHeaders(isMultipart = false): HeadersInit {
   const headers: Record<string, string> = {};
   
   if (!isMultipart) {
     headers['Content-Type'] = 'application/json';
-  }
-  
-  const token = getToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
   }
   
   return headers;
@@ -27,6 +18,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       ...headers,
       ...options.headers,
@@ -354,9 +346,26 @@ export interface ProductInsightsResponse {
 export const api = {
   // --- Auth ---
   signup: (payload: { email: string; password: string; display_name: string }) =>
-    request<TokenResponse>('/auth/signup', {
+    request<{ success: boolean; message: string; email: string }>('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  verifyEmail: (payload: { email: string; code: string }) =>
+    request<TokenResponse>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  resendVerification: (email: string) =>
+    request<{ success: boolean; message: string }>('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  logout: () =>
+    request<{ message: string }>('/auth/logout', {
+      method: 'POST',
     }),
 
   login: (formData: URLSearchParams) =>
@@ -613,14 +622,9 @@ export const api = {
     }),
 
   downloadAgentReport: async (fileId: string, filename = 'monthly_report.pdf') => {
-    const token = getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
     const response = await fetch(`${API_BASE}/agents/monthly-report/reports/${fileId}`, {
       method: 'GET',
-      headers,
+      credentials: 'include',
     });
     if (!response.ok) {
       throw new Error('Failed to download report PDF');
@@ -676,14 +680,9 @@ export const api = {
     }),
 
   downloadYearlyAgentReport: async (fileId: string, filename = 'yearly_report.pdf') => {
-    const token = getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
     const response = await fetch(`${API_BASE}/agents/yearly-report/reports/${fileId}`, {
       method: 'GET',
-      headers,
+      credentials: 'include',
     });
     if (!response.ok) {
       throw new Error('Failed to download report PDF');
