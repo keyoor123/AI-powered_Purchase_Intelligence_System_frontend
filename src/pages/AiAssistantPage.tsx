@@ -203,6 +203,7 @@ const AiAssistantPage: React.FC = () => {
               className="input-field"
               style={{ paddingRight: '3rem' }}
               disabled={loading}
+              maxLength={1000}
             />
             <button 
               type="submit" 
